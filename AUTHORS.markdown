@@ -5,10 +5,10 @@ the project. If you don't like the result, it is probably his fault.
 
 * [Edward Kmett](mailto:ekmett@gmail.com) [@ekmett](https://github.com/ekmett)
 
-You can watch contributors carry on the quest for bragging rights in the [contributors graph](https://github.com/analytics/compensated/graphs/contributors).
+After that Oleg Grenrus rewrote it to work with `optics` package.
 
-Omission from this list is by no means an attempt to discount your contribution.
+* [Oleg Grenrus](mailto:oleg.grenrus@iki.fi) [@phadej](https://github.com/optics)
 
 Thank you for all of your help!
 
--Edward Kmett
+- Oleg
