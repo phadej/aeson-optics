@@ -1,5 +1,4 @@
-version:            1.1
-x-revision:         1
+version:            1.1.0.1
 name:               aeson-optics
 category:           Data, JSON, Optics
 license:            MIT
