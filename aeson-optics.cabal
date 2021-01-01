@@ -17,7 +17,7 @@ copyright:
 
 build-type:         Simple
 tested-with:
-  GHC ==8.0.2 || ==8.2.2 || ==8.4.4 || ==8.6.5 || ==8.8.3 || ==8.10.1
+  GHC ==8.0.2 || ==8.2.2 || ==8.4.4 || ==8.6.5 || ==8.8.4 || ==8.10.3
 
 synopsis:           Law-abiding optics for aeson
 description:        Law-abiding optics for aeson.
