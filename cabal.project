@@ -1,1 +1,6 @@
 packages: .
+
+source-repository-package
+  type: git
+  location: git@github.com:haskell/aeson.git
+  tag: c1359a2083b8cf7999cf6103aa613d2dc174a76b

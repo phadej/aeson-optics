@@ -1,5 +1,4 @@
-version:            1.1.0.1
-x-revision:         6
+version:            1.1.1
 name:               aeson-optics
 category:           Data, JSON, Optics
 license:            MIT
@@ -24,6 +23,7 @@ description:        Law-abiding optics for aeson.
 extra-source-files:
   AUTHORS.markdown
   README.markdown
+  CHANGELOG.md
 
 source-repository head
   type:     git
@@ -32,7 +32,7 @@ source-repository head
 library
   default-language: Haskell2010
   build-depends:
-      aeson                 >=0.11     && <1.6
+      aeson                 >=0.11     && <1.6 || >=2.0 && <2.1
     , attoparsec            >=0.13.1.0 && <0.15
     , base                  >=4.9      && <4.16
     , base-compat           >=0.9.3    && <0.13
