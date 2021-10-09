@@ -77,6 +77,11 @@ import qualified Data.Text.Encoding      as StrictText
 import qualified Data.Text.Lazy          as LazyText
 import qualified Data.Text.Lazy.Encoding as LazyText
 
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key    as Key
+import qualified Data.Aeson.KeyMap as KM
+#endif
+
 -- $setup
 -- >>> import Data.ByteString.Char8 as Strict.Char8
 -- >>> import qualified Data.Vector as Vector
@@ -299,7 +304,15 @@ class AsPrimitive t => AsValue t where
   -- >>> _Object # HashMap.fromList [("key", _String # "value")] :: String
   -- "{\"key\":\"value\"}"
   _Object :: Prism' t (HashMap Text Value)
-  _Object = _Value%prism Object (\v -> case v of Object o -> Right o; _ -> Left v)
+  _Object = _Value%prism (Object . fwd) (\v -> case v of Object o -> Right (bwd o); _ -> Left v)
+    where
+#if MIN_VERSION_aeson(2,0,0)
+    fwd = KM.fromHashMapText
+    bwd = KM.toHashMapText
+#else
+    fwd = id
+    bwd = id
+#endif
   {-# INLINE _Object #-}
 
   -- |
@@ -481,6 +494,21 @@ instance Plated Value where
   plate _ xs = pure xs
   {-# INLINE plate #-}
 -}
+
+#if MIN_VERSION_aeson(2,0,0)
+type instance Index (KM.KeyMap v) = Key.Key
+type instance IxValue (KM.KeyMap v) = v
+
+instance Ixed (KM.KeyMap v)
+
+instance At (KM.KeyMap v) where
+  at i = lensVL (\f -> KM.alterF f i)
+  {-# INLINE at #-}
+
+instance Each Key.Key (KM.KeyMap a) (KM.KeyMap b) a b where
+  each = itraversalVL KM.traverseWithKey
+  {-# INLINE[1] each #-}
+#endif
 
 ------------------------------------------------------------------------------
 -- Pattern Synonyms
