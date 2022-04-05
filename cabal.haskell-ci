@@ -1,3 +1,4 @@
 branches: master
+docspec: True
 doctest: <9
 doctest-filter-packages: base-compat-batteries

@@ -27,13 +27,11 @@ module Data.Aeson.Optics
     AsNumber(..)
   , _Integral
   , nonNull
-  -- * Primitive
-  , Primitive(..)
-  , AsPrimitive(..)
   -- * Objects and Arrays
   , AsValue(..)
   , key, members
   , nth, values
+  , IsKey (..)
   -- * Decoding
   , AsJSON(..)
   , _JSON'
@@ -44,48 +42,48 @@ module Data.Aeson.Optics
   , pattern Double
   , pattern Integer
   , pattern Integral
-  , pattern Primitive
   , pattern Bool_
   , pattern String_
   , pattern Null_
+  , pattern Key_
   ) where
 
-import Prelude ()
-import Prelude.Compat hiding (null)
+import Prelude hiding (null)
 
 import Data.Aeson
        (FromJSON, Result (..), ToJSON, Value (..), encode, fromJSON, toJSON)
 import Data.Aeson.Parser               (value)
 import Data.Attoparsec.ByteString.Lazy (maybeResult, parse)
-import Data.ByteString.Lazy.Char8      as Lazy hiding (putStrLn)
-import Data.Data
-import Data.HashMap.Strict             (HashMap)
 import Data.Scientific                 (Scientific)
 import Data.Text                       (Text)
 import Data.Text.Optics                (packed)
+import Data.Text.Short                 (ShortText)
 import Data.Vector                     (Vector)
 
 import Optics.At ()
 import Optics.Core
 import Optics.Indexed ()
 
-import qualified Data.ByteString         as Strict
-import qualified Data.ByteString.Lazy    as LBS
-import qualified Data.Scientific         as Scientific
-import qualified Data.Text               as StrictText
-import qualified Data.Text.Encoding      as StrictText
-import qualified Data.Text.Lazy          as LazyText
-import qualified Data.Text.Lazy.Encoding as LazyText
-
-#if MIN_VERSION_aeson(2,0,0)
-import qualified Data.Aeson.Key    as Key
-import qualified Data.Aeson.KeyMap as KM
-#endif
+import qualified Data.Aeson.Key             as Key
+import qualified Data.Aeson.KeyMap          as KM
+import qualified Data.ByteString            as Strict
+import qualified Data.ByteString.Lazy       as LBS
+import qualified Data.Scientific            as Scientific
+import qualified Data.Text                  as StrictText
+import qualified Data.Text.Encoding         as StrictText
+import qualified Data.Text.Lazy             as LazyText
+import qualified Data.Text.Lazy.Encoding    as LazyText
 
 -- $setup
--- >>> import Data.ByteString.Char8 as Strict.Char8
--- >>> import qualified Data.Vector as Vector
--- >>> import qualified Data.HashMap.Strict as HashMap
+-- >>> import Optics.Core
+-- >>> import Data.Aeson (Value (..))
+-- >>> import Data.Text (Text)
+-- >>> import qualified Data.ByteString             as Strict
+-- >>> import qualified Data.ByteString.Char8       as Strict.Char8
+-- >>> import qualified Data.ByteString.Lazy        as Lazy
+-- >>> import qualified Data.ByteString.Lazy.Char8  as Lazy.Char8
+-- >>> import qualified Data.Aeson.KeyMap           as KeyMap
+-- >>> import qualified Data.Vector                 as Vector
 -- >>> :set -XOverloadedStrings
 -- >>> import Optics.Operators
 
@@ -101,8 +99,8 @@ class AsNumber t where
   -- >>> "[1, \"x\"]" ^? nth 1 % _Number
   -- Nothing
   _Number :: Prism' t Scientific
-  default _Number :: AsPrimitive t => Prism' t Scientific
-  _Number = _Primitive%_Number
+  default _Number :: AsValue t => Prism' t Scientific
+  _Number = _Value%_Number
   {-# INLINE _Number #-}
 
   -- |
@@ -138,7 +136,7 @@ instance AsNumber Scientific where
   {-# INLINE _Number #-}
 
 instance AsNumber Strict.ByteString
-instance AsNumber Lazy.ByteString
+instance AsNumber LBS.ByteString
 instance AsNumber Text
 instance AsNumber LazyText.Text
 instance AsNumber String
@@ -158,118 +156,6 @@ _Integral :: (AsNumber t, Integral a) => Prism' t a
 _Integral = _Number % iso floor fromIntegral
 {-# INLINE _Integral #-}
 
-------------------------------------------------------------------------------
--- Null values and primitives
-------------------------------------------------------------------------------
-
--- | Primitives of 'Value'
-data Primitive
-  = StringPrim !Text
-  | NumberPrim !Scientific
-  | BoolPrim !Bool
-  | NullPrim
-  deriving (Eq,Ord,Show,Data,Typeable)
-
-instance AsNumber Primitive where
-  _Number = prism NumberPrim $ \v -> case v of NumberPrim s -> Right s; _ -> Left v
-  {-# INLINE _Number #-}
-
-class AsNumber t => AsPrimitive t where
-  -- |
-  -- >>> "[1, \"x\", null, true, false]" ^? nth 0 % _Primitive
-  -- Just (NumberPrim 1.0)
-  --
-  -- >>> "[1, \"x\", null, true, false]" ^? nth 1 % _Primitive
-  -- Just (StringPrim "x")
-  --
-  -- >>> "[1, \"x\", null, true, false]" ^? nth 2 % _Primitive
-  -- Just NullPrim
-  --
-  -- >>> "[1, \"x\", null, true, false]" ^? nth 3 % _Primitive
-  -- Just (BoolPrim True)
-  --
-  -- >>> "[1, \"x\", null, true, false]" ^? nth 4 % _Primitive
-  -- Just (BoolPrim False)
-  _Primitive :: Prism' t Primitive
-  default _Primitive :: AsValue t => Prism' t Primitive
-  _Primitive = _Value%_Primitive
-  {-# INLINE _Primitive #-}
-
-  -- |
-  -- >>> "{\"a\": \"xyz\", \"b\": true}" ^? key "a" % _String
-  -- Just "xyz"
-  --
-  -- >>> "{\"a\": \"xyz\", \"b\": true}" ^? key "b" % _String
-  -- Nothing
-  --
-  -- >>> _Object # HashMap.fromList [("key", _String # "value")] :: String
-  -- "{\"key\":\"value\"}"
-  _String :: Prism' t Text
-  _String = _Primitive%prism StringPrim (\v -> case v of StringPrim s -> Right s; _ -> Left v)
-  {-# INLINE _String #-}
-
-  -- |
-  -- >>> "{\"a\": \"xyz\", \"b\": true}" ^? key "b" % _Bool
-  -- Just True
-  --
-  -- >>> "{\"a\": \"xyz\", \"b\": true}" ^? key "a" % _Bool
-  -- Nothing
-  --
-  -- >>> _Bool # True :: String
-  -- "true"
-  --
-  -- >>> _Bool # False :: String
-  -- "false"
-  _Bool :: Prism' t Bool
-  _Bool = _Primitive%prism BoolPrim (\v -> case v of BoolPrim b -> Right b; _ -> Left v)
-  {-# INLINE _Bool #-}
-
-  -- |
-  -- >>> "{\"a\": \"xyz\", \"b\": null}" ^? key "b" % _Null
-  -- Just ()
-  --
-  -- >>> "{\"a\": \"xyz\", \"b\": null}" ^? key "a" % _Null
-  -- Nothing
-  --
-  -- >>> _Null # () :: String
-  -- "null"
-  _Null :: Prism' t ()
-  _Null = _Primitive % prism (const NullPrim) (\v -> case v of NullPrim -> Right (); _ -> Left v)
-  {-# INLINE _Null #-}
-
-
-instance AsPrimitive Value where
-  _Primitive = prism fromPrim toPrim
-    where
-      toPrim (String s) = Right $ StringPrim s
-      toPrim (Number n) = Right $ NumberPrim n
-      toPrim (Bool b)   = Right $ BoolPrim b
-      toPrim Null       = Right NullPrim
-      toPrim v          = Left v
-      {-# INLINE toPrim #-}
-      fromPrim (StringPrim s) = String s
-      fromPrim (NumberPrim n) = Number n
-      fromPrim (BoolPrim b)   = Bool b
-      fromPrim NullPrim       = Null
-      {-# INLINE fromPrim #-}
-  {-# INLINE _Primitive #-}
-  _String = prism String $ \v -> case v of String s -> Right s; _ -> Left v
-  {-# INLINE _String #-}
-  _Bool = prism Bool (\v -> case v of Bool b -> Right b; _ -> Left v)
-  {-# INLINE _Bool #-}
-  _Null = prism (const Null) (\v -> case v of Null -> Right (); _ -> Left v)
-  {-# INLINE _Null #-}
-
-instance AsPrimitive Strict.ByteString
-instance AsPrimitive Lazy.ByteString
-instance AsPrimitive StrictText.Text
-instance AsPrimitive LazyText.Text
-instance AsPrimitive String
-
-instance AsPrimitive Primitive where
-  _Primitive = castOptic simple
-  {-# INLINE _Primitive #-}
-
 -- | Prism into non-'Null' values
 --
 -- >>> "{\"a\": \"xyz\", \"b\": null}" ^? key "a" % nonNull
@@ -288,7 +174,7 @@ nonNull = prism id (\v -> if isn't _Null v then Right v else Left v)
 -- Non-primitive traversals
 ------------------------------------------------------------------------------
 
-class AsPrimitive t => AsValue t where
+class AsNumber t => AsValue t where
   -- |
   -- >>> preview _Value "[1,2,3]" == Just (Array (Vector.fromList [Number 1.0,Number 2.0,Number 3.0]))
   -- True
@@ -301,19 +187,10 @@ class AsPrimitive t => AsValue t where
   -- >>> "{\"a\": {}, \"b\": null}" ^? key "b" % _Object
   -- Nothing
   --
-  -- >>> _Object # HashMap.fromList [("key", _String # "value")] :: String
+  -- >>> _Object # KeyMap.fromList [("key", _String # "value")] :: String
   -- "{\"key\":\"value\"}"
-  _Object :: Prism' t (HashMap Text Value)
-  _Object = _Value%prism (Object . fwd) (\v -> case v of Object o -> Right (bwd o); _ -> Left v)
-    where
-#if MIN_VERSION_aeson(2,0,0)
-    fwd = KM.fromHashMapText
-    bwd = KM.toHashMapText
-#else
-    fwd = id
-    bwd = id
-#endif
-  {-# INLINE _Object #-}
+  _Object :: Prism' t (KM.KeyMap Value)
+  _Object = _Value%prism Object  (\v -> case v of Object o -> Right o; _ -> Left v)
 
   -- |
   -- >>> preview _Array "[1,2,3]" == Just (Vector.fromList [Number 1.0,Number 2.0,Number 3.0])
@@ -321,6 +198,49 @@ class AsPrimitive t => AsValue t where
   _Array :: Prism' t (Vector Value)
   _Array = _Value%prism Array (\v -> case v of Array a -> Right a; _ -> Left v)
   {-# INLINE _Array #-}
+
+  -- |
+  -- >>> "{\"a\": \"xyz\", \"b\": true}" ^? key "a" % _String
+  -- Just "xyz"
+  --
+  -- >>> "{\"a\": \"xyz\", \"b\": true}" ^? key "b" % _String
+  -- Nothing
+  --
+  -- >>> _Object # KeyMap.fromList [("key", _String # "value")] :: String
+  -- "{\"key\":\"value\"}"
+  _String :: Prism' t Text
+  _String = _Value%prism String (\v -> case v of String s -> Right s; _ -> Left v)
+  {-# INLINE _String #-}
+
+  -- |
+  -- >>> "{\"a\": \"xyz\", \"b\": true}" ^? key "b" % _Bool
+  -- Just True
+  --
+  -- >>> "{\"a\": \"xyz\", \"b\": true}" ^? key "a" % _Bool
+  -- Nothing
+  --
+  -- >>> _Bool # True :: String
+  -- "true"
+  --
+  -- >>> _Bool # False :: String
+  -- "false"
+  _Bool :: Prism' t Bool
+  _Bool = _Value%prism Bool (\v -> case v of Bool b -> Right b; _ -> Left v)
+  {-# INLINE _Bool #-}
+
+  -- |
+  -- >>> "{\"a\": \"xyz\", \"b\": null}" ^? key "b" % _Null
+  -- Just ()
+  --
+  -- >>> "{\"a\": \"xyz\", \"b\": null}" ^? key "a" % _Null
+  -- Nothing
+  --
+  -- >>> _Null # () :: String
+  -- "null"
+  _Null :: Prism' t ()
+  _Null = _Value % prism (const Null) (\v -> case v of Null -> Right (); _ -> Left v)
+  {-# INLINE _Null #-}
+
 
 instance AsValue Value where
   _Value = castOptic simple
@@ -330,7 +250,7 @@ instance AsValue Strict.ByteString where
   _Value = _JSON
   {-# INLINE _Value #-}
 
-instance AsValue Lazy.ByteString where
+instance AsValue LBS.ByteString where
   _Value = _JSON
   {-# INLINE _Value #-}
 
@@ -355,7 +275,7 @@ instance AsValue LazyText.Text where
 --
 -- >>> "[1,2,3]" ^? key "a"
 -- Nothing
-key :: AsValue t => Text -> AffineTraversal' t Value
+key :: AsValue t => Key.Key -> AffineTraversal' t Value
 key i = _Object % ix i
 {-# INLINE key #-}
 
@@ -366,7 +286,7 @@ key i = _Object % ix i
 --
 -- >>> "{\"a\": 4}" & members % _Number %~ (*10)
 -- "{\"a\":40}"
-members :: AsValue t => IxTraversal' Text t Value
+members :: AsValue t => IxTraversal' Key.Key t Value
 members = _Object % itraversed
 {-# INLINE members #-}
 
@@ -401,11 +321,56 @@ strictUtf8 = packed % strictTextUtf8
 strictTextUtf8 :: Iso' StrictText.Text Strict.ByteString
 strictTextUtf8 = iso StrictText.encodeUtf8 StrictText.decodeUtf8
 
-lazyTextUtf8 :: Iso' LazyText.Text Lazy.ByteString
+lazyTextUtf8 :: Iso' LazyText.Text LBS.ByteString
 lazyTextUtf8 = iso LazyText.encodeUtf8 LazyText.decodeUtf8
 
 _JSON' :: (AsJSON t, FromJSON a, ToJSON a) => Prism' t a
 _JSON' = _JSON
+
+class IsKey t where
+  -- | '_Key' is an 'Iso' from something to a 'Key'. This is primarily intended
+  -- for situations where one wishes to use object keys that are not string
+  -- literals and therefore must be converted:
+  --
+  -- >>> let k = "a" :: Text
+  -- >>> "{\"a\": 100, \"b\": 200}" ^? key (k ^. _Key)
+  -- Just (Number 100.0)
+  --
+  -- Note that applying '_Key' directly to a string literal
+  -- (e.g., @\"a\" ^. '_Key'@) will likely not typecheck when
+  -- @OverloadedStrings@ is enabled.
+  _Key :: Iso' t Key.Key
+
+instance IsKey Key.Key where
+  _Key = simple
+  {-# INLINE _Key #-}
+
+instance IsKey String where
+  _Key = iso Key.fromString Key.toString
+  {-# INLINE _Key #-}
+
+instance IsKey Text where
+  _Key = iso Key.fromText Key.toText
+  {-# INLINE _Key #-}
+
+instance IsKey LazyText.Text where
+  _Key = iso LazyText.toStrict LazyText.fromStrict % _Key
+  {-# INLINE _Key #-}
+
+instance IsKey ShortText where
+  _Key = iso Key.fromShortText Key.toShortText
+  {-# INLINE _Key #-}
+
+{-
+https://github.com/lens/lens-aeson/issues/48
+instance IsKey Strict.ByteString where
+  _Key = from strictTextUtf8._Key
+  {-# INLINE _Key #-}
+
+instance IsKey LBS.ByteString where
+  _Key = from lazyTextUtf8._Key
+  {-# INLINE _Key #-}
+-}
 
 class AsJSON t where
   -- | '_JSON' is a 'Prism' from something containing JSON to something encoded in that structure
@@ -415,10 +380,10 @@ instance AsJSON Strict.ByteString where
   _JSON = iso LBS.fromStrict LBS.toStrict % _JSON
   {-# INLINE _JSON #-}
 
-instance AsJSON Lazy.ByteString where
+instance AsJSON LBS.ByteString where
   _JSON = prism' encode decodeValue
     where
-      decodeValue :: (FromJSON a) => Lazy.ByteString -> Maybe a
+      decodeValue :: (FromJSON a) => LBS.ByteString -> Maybe a
       decodeValue s = maybeResult (parse value s) >>= \x -> case fromJSON x of
         Success v -> Just v
         _         -> Nothing
@@ -453,7 +418,7 @@ instance AsJSON Value where
 -- >>> preview (_Integer :: Prism' Lazy.ByteString Integer) "42"
 -- Just 42
 --
--- >>> Lazy.unpack (review (_Integer :: Prism' Lazy.ByteString Integer) 42)
+-- >>> Lazy.Char8.unpack (review (_Integer :: Prism' Lazy.ByteString Integer) 42)
 -- "42"
 
 -- $StrictByteStringTests
@@ -480,7 +445,7 @@ instance AsJSON Value where
 -- Orphan instances for lens library interop
 ------------------------------------------------------------------------------
 
-type instance Index Value = Text
+type instance Index Value = Key.Key
 
 type instance IxValue Value = Value
 instance Ixed Value where
@@ -495,7 +460,6 @@ instance Plated Value where
   {-# INLINE plate #-}
 -}
 
-#if MIN_VERSION_aeson(2,0,0)
 type instance Index (KM.KeyMap v) = Key.Key
 type instance IxValue (KM.KeyMap v) = v
 
@@ -508,13 +472,11 @@ instance At (KM.KeyMap v) where
 instance Each Key.Key (KM.KeyMap a) (KM.KeyMap b) a b where
   each = itraversalVL KM.traverseWithKey
   {-# INLINE[1] each #-}
-#endif
 
 ------------------------------------------------------------------------------
 -- Pattern Synonyms
 ------------------------------------------------------------------------------
 
-#if __GLASGOW_HASKELL__ >= 800
 pattern JSON :: (FromJSON a, ToJSON a, AsJSON t) => () => a -> t
 pattern JSON a <- (preview _JSON -> Just a) where
   JSON a = _JSON # a
@@ -539,19 +501,18 @@ pattern Integral :: (AsNumber t, Integral a) => a -> t
 pattern Integral d <- (preview _Integral -> Just d) where
   Integral d = _Integral # d
 
-pattern Primitive :: AsPrimitive t => Primitive -> t
-pattern Primitive p <- (preview _Primitive -> Just p) where
-  Primitive p = _Primitive # p
-
-pattern Bool_ :: AsPrimitive t => Bool -> t
+pattern Bool_ :: AsValue t => Bool -> t
 pattern Bool_ b <- (preview _Bool -> Just b) where
   Bool_ b = _Bool # b
 
-pattern String_ :: AsPrimitive t => Text -> t
+pattern String_ :: AsValue t => Text -> t
 pattern String_ p <- (preview _String -> Just p) where
   String_ p = _String # p
 
-pattern Null_ :: AsPrimitive t => t
+pattern Null_ :: AsValue t => t
 pattern Null_ <- (preview _Null -> Just ()) where
   Null_ = _Null # ()
-#endif
+
+pattern Key_ :: IsKey t => Key.Key -> t
+pattern Key_ k <- (preview _Key -> Just k) where
+  Key_ k = _Key # k
