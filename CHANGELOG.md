@@ -1,3 +1,7 @@
+# 1.2.0.1
+
+* Drop direct dependency on `unordered-containers`
+
 # 1.2
 
 Release corresponding to [`lens-aeson-1.2`](https://hackage.haskell.org/package/lens-aeson-1.2)
