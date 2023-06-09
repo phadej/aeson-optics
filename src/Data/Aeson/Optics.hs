@@ -51,9 +51,7 @@ module Data.Aeson.Optics
 import Prelude hiding (null)
 
 import Data.Aeson
-       (FromJSON, Result (..), ToJSON, Value (..), encode, fromJSON, toJSON)
-import Data.Aeson.Parser               (value)
-import Data.Attoparsec.ByteString.Lazy (maybeResult, parse)
+       (FromJSON, Result (..), ToJSON, Value (..), encode, fromJSON, toJSON, decode)
 import Data.Scientific                 (Scientific)
 import Data.Text                       (Text)
 import Data.Text.Optics                (packed)
@@ -381,12 +379,7 @@ instance AsJSON Strict.ByteString where
   {-# INLINE _JSON #-}
 
 instance AsJSON LBS.ByteString where
-  _JSON = prism' encode decodeValue
-    where
-      decodeValue :: (FromJSON a) => LBS.ByteString -> Maybe a
-      decodeValue s = maybeResult (parse value s) >>= \x -> case fromJSON x of
-        Success v -> Just v
-        _         -> Nothing
+  _JSON = prism' encode decode
   {-# INLINE _JSON #-}
 
 instance AsJSON String where
