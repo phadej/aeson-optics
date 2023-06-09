@@ -1,3 +1,7 @@
+# 1.2.1
+
+* Drop dependency on `attoparsec`. Use `aeson`s `decode` to parse `Value`.
+
 # 1.2.0.1
 
 * Drop direct dependency on `unordered-containers`
