@@ -1,3 +1,7 @@
+# 1.2.2
+
+* Drop support for GHCs prior GHC-8.6.5
+
 # 1.2.1
 
 * Drop dependency on `attoparsec`. Use `aeson`s `decode` to parse `Value`.
